@@ -26,15 +26,15 @@ op --version
 ### 2. Install op-ssh-load
 
 ```sh
-mkdir -p ~/bin
-curl -sSfL https://raw.githubusercontent.com/narasaka/op-ssh-load/main/op-ssh-load -o ~/bin/op-ssh-load
-chmod +x ~/bin/op-ssh-load
+mkdir -p ~/.local/bin
+curl -sSfL https://raw.githubusercontent.com/narasaka/op-ssh-load/main/op-ssh-load -o ~/.local/bin/op-ssh-load
+chmod +x ~/.local/bin/op-ssh-load
 ```
 
-Make sure `~/bin` is in your PATH. Add this to your `~/.bashrc` if it is not:
+Most Linux distributions add `~/.local/bin` to your PATH by default. If yours does not, add this to your `~/.bashrc`:
 
 ```sh
-export PATH="$HOME/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ### 3. Configure your service account token
