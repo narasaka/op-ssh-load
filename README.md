@@ -13,35 +13,9 @@ Private keys are piped directly from 1Password to `ssh-add` and never touch the 
 
 ### 1. Install the 1Password CLI
 
-With root access, add the 1Password apt repository and install:
+Follow the official installation guide:
 
-```sh
-curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
-  sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
-
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | \
-  sudo tee /etc/apt/sources.list.d/1password.list
-
-sudo apt update && sudo apt install -y 1password-cli
-```
-
-Without root access, download the binary directly:
-
-```sh
-mkdir -p ~/bin
-OP_VERSION="2.33.1"
-curl -sSfL "https://cache.agilebits.com/dist/1P/op2/pkg/v${OP_VERSION}/op_linux_amd64_v${OP_VERSION}.zip" -o /tmp/op.zip
-unzip -o /tmp/op.zip -d /tmp/op_extract
-mv /tmp/op_extract/op ~/bin/op
-chmod +x ~/bin/op
-rm -rf /tmp/op.zip /tmp/op_extract
-```
-
-If `unzip` is not available, use Python instead:
-
-```sh
-python3 -c "import zipfile; zipfile.ZipFile('/tmp/op.zip').extractall('/tmp/op_extract')"
-```
+https://developer.1password.com/docs/cli/get-started/
 
 Verify it works:
 
