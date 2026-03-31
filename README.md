@@ -4,6 +4,12 @@ Load SSH keys from 1Password into your ssh-agent on headless Linux servers.
 
 Private keys are piped directly from 1Password to `ssh-add` and never touch the filesystem.
 
+## Quick install
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/narasaka/op-ssh-load/main/op-ssh-load -o ~/.local/bin/op-ssh-load && chmod +x ~/.local/bin/op-ssh-load
+```
+
 ## Prerequisites
 
 - A 1Password account with SSH keys stored in a vault
