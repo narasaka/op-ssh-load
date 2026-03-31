@@ -4,32 +4,27 @@ Load SSH keys from 1Password into your ssh-agent on headless Linux servers.
 
 Private keys are piped directly from 1Password to `ssh-add` and never touch the filesystem.
 
-## Quick install
-
-```sh
-curl -sSfL https://raw.githubusercontent.com/narasaka/op-ssh-load/main/op-ssh-load -o ~/.local/bin/op-ssh-load && chmod +x ~/.local/bin/op-ssh-load
-```
-
 ## Prerequisites
 
 - A 1Password account with SSH keys stored in a vault
 - A [1Password Service Account](https://developer.1password.com/docs/service-accounts/get-started/) with read access to that vault
+- The [1Password CLI](https://developer.1password.com/docs/cli/get-started/) installed (`op`)
 
 ## Install
 
-### 1. Install the 1Password CLI
+There are two ways to install: the install script or manually.
 
-Follow the official installation guide:
+### Option A: Install script
 
-https://developer.1password.com/docs/cli/get-started/
-
-Verify it works:
+The install script downloads `op-ssh-load`, prompts you for your service account token, and configures everything:
 
 ```sh
-op --version
+bash <(curl -sSfL https://raw.githubusercontent.com/narasaka/op-ssh-load/main/install.sh)
 ```
 
-### 2. Install op-ssh-load
+### Option B: Manual install
+
+1. Download the script:
 
 ```sh
 mkdir -p ~/.local/bin
@@ -43,9 +38,7 @@ Most Linux distributions add `~/.local/bin` to your PATH by default. If yours do
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 3. Configure your service account token
-
-Create the token file:
+2. Configure your service account token:
 
 ```sh
 mkdir -p ~/.config/op
@@ -62,7 +55,7 @@ Alternatively, export it as an environment variable:
 export OP_SERVICE_ACCOUNT_TOKEN="ops_..."
 ```
 
-### 4. Set up ssh-agent auto-start (optional)
+### Set up ssh-agent auto-start (optional)
 
 Add this to your `~/.bashrc` so the agent persists across SSH sessions:
 
