@@ -32,7 +32,7 @@ curl -sSfL https://raw.githubusercontent.com/narasaka/op-ssh-load/main/op-ssh-lo
 chmod +x ~/.local/bin/op-ssh-load
 ```
 
-Most Linux distributions add `~/.local/bin` to your PATH by default. If yours does not, add this to your `~/.bashrc`:
+Most Linux distributions add `~/.local/bin` to your PATH by default. If yours does not, add this to your shell's config file (`~/.bashrc`, `~/.zshrc`, `~/.profile`, etc.):
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
@@ -57,7 +57,9 @@ export OP_SERVICE_ACCOUNT_TOKEN="ops_..."
 
 ### Set up ssh-agent auto-start (optional)
 
-Add this to your `~/.bashrc` so the agent persists across SSH sessions:
+> The install script (Option A) offers to configure this automatically.
+
+To set it up manually, add this to your shell's config file (`~/.bashrc`, `~/.zshrc`, `~/.profile`, etc.). The snippet is POSIX-compatible and works in Bash, Zsh, and other POSIX shells:
 
 ```sh
 SSH_ENV="$HOME/.ssh/agent-env"
@@ -78,10 +80,10 @@ if [ -z "${SSH_AUTH_SOCK:-}" ]; then
 fi
 ```
 
-Then reload your shell:
+Then reload your shell (or open a new terminal):
 
 ```sh
-source ~/.bashrc
+exec "$SHELL"
 ```
 
 ## Usage
