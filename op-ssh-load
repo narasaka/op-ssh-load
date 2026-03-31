@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+#
+# op-ssh-load — Load all SSH keys from 1Password into ssh-agent
+#
+# Keys are piped directly to ssh-add via process substitution.
+# Private keys NEVER touch the filesystem.
+#
+# Usage:
+#   op-ssh-load              # Load all SSH keys from all accessible vaults
+#   op-ssh-load --list       # List available SSH keys without loading
+#   op-ssh-load --clear      # Remove all keys from agent, then reload from 1Password
+#   op-ssh-load <item-name>  # Load a specific key by name
+#
+set -euo pipefail
+
+TOKEN_FILE="${HOME}/.config/op/service-account-token"
+
+# --- Colors (if terminal supports them) ---
+if [[ -t 1 ]]; then
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  RED='\033[0;31m'
+  BOLD='\033[1m'
+  RESET='\033[0m'
+else
+  GREEN='' YELLOW='' RED='' BOLD='' RESET=''
+fi
+
+info()  { echo -e "${GREEN}[+]${RESET} $*"; }
+warn()  { echo -e "${YELLOW}[!]${RESET} $*"; }
+error() { echo -e "${RED}[x]${RESET} $*" >&2; }
+die()   { error "$@"; exit 1; }
+
+# --- Pre-flight checks (deferred for --help) ---
+preflight() {
+  command -v op &>/dev/null || die "'op' CLI not found in PATH. Install 1password-cli first."
+
+  if [[ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+    if [[ -f "$TOKEN_FILE" && -s "$TOKEN_FILE" ]]; then
+      export OP_SERVICE_ACCOUNT_TOKEN
+      OP_SERVICE_ACCOUNT_TOKEN="$(cat "$TOKEN_FILE")"
+    else
+      die "No service account token found.\n    Set OP_SERVICE_ACCOUNT_TOKEN or put your token in:\n    ${TOKEN_FILE}"
+    fi
+  fi
+
+  # Ensure ssh-agent is running
+  if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+    die "ssh-agent is not running. Start it first:\n    eval \"\$(ssh-agent -s)\""
+  fi
+}
+
+# --- Functions ---
+
+list_ssh_keys() {
+  # List all SSH Key items across accessible vaults
+  # Returns JSON array: [{id, title, vault: {id, name}}]
+  op item list --categories "SSH Key" --format=json 2>/dev/null
+}
+
+load_key() {
+  local vault_name="$1"
+  local item_title="$2"
+
+  # Use ?ssh-format=openssh to get OpenSSH-compatible key directly from 1Password
+  # Pipe straight to ssh-add /dev/stdin — private key never touches the filesystem
+  if op read "op://${vault_name}/${item_title}/private key?ssh-format=openssh" 2>/dev/null \
+     | ssh-add /dev/stdin 2>/dev/null; then
+    info "Loaded: ${BOLD}${item_title}${RESET} (vault: ${vault_name})"
+    return 0
+  fi
+
+  warn "Failed to load: ${BOLD}${item_title}${RESET} (vault: ${vault_name})"
+  return 1
+}
+
+do_list() {
+  info "SSH keys available in 1Password:"
+  echo ""
+  local keys_json
+  keys_json="$(list_ssh_keys)"
+
+  if [[ -z "$keys_json" || "$keys_json" == "[]" ]]; then
+    warn "No SSH keys found in accessible vaults."
+    warn "Make sure your service account has access to the vault(s) containing SSH keys."
+    return 0
+  fi
+
+  echo "$keys_json" | python3 -c "
+import sys, json
+items = json.load(sys.stdin)
+for item in items:
+    vid = item.get('vault', {}).get('name', item.get('vault', {}).get('id', '?'))
+    print(f\"  {item['title']:30s}  vault: {vid:20s}  id: {item['id']}\")
+"
+  echo ""
+  local count
+  count="$(echo "$keys_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")"
+  info "${count} SSH key(s) found."
+}
+
+do_load_all() {
+  local keys_json loaded=0 failed=0 total=0
+  keys_json="$(list_ssh_keys)"
+
+  if [[ -z "$keys_json" || "$keys_json" == "[]" ]]; then
+    warn "No SSH keys found in accessible vaults."
+    warn "Make sure your service account has access to the vault(s) containing SSH keys."
+    return 1
+  fi
+
+  total="$(echo "$keys_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")"
+  info "Found ${total} SSH key(s). Loading into agent..."
+  echo ""
+
+  # Parse each item and load
+  while IFS=$'\t' read -r vault_name item_title; do
+    if load_key "$vault_name" "$item_title"; then
+      loaded=$((loaded + 1))
+    else
+      failed=$((failed + 1))
+    fi
+  done < <(echo "$keys_json" | python3 -c "
+import sys, json
+for item in json.load(sys.stdin):
+    vault = item.get('vault', {}).get('name', item.get('vault', {}).get('id', ''))
+    print(f\"{vault}\t{item['title']}\")
+")
+
+  echo ""
+  info "Done. ${loaded}/${total} key(s) loaded into ssh-agent."
+  if [[ $failed -gt 0 ]]; then
+    warn "${failed} key(s) failed to load."
+  fi
+  return 0
+}
+
+do_load_single() {
+  local name="$1"
+  local keys_json vault_name item_title
+
+  keys_json="$(list_ssh_keys)"
+  read -r vault_name item_title < <(echo "$keys_json" | python3 -c "
+import sys, json
+name = '${name}'
+for item in json.load(sys.stdin):
+    if item['title'].lower() == name.lower() or item['id'] == name:
+        vault = item.get('vault', {}).get('name', item.get('vault', {}).get('id', ''))
+        print(f\"{vault}\t{item['title']}\")
+        break
+else:
+    print('')
+" 2>/dev/null)
+
+  if [[ -z "$vault_name" ]]; then
+    die "SSH key '${name}' not found. Use 'op-ssh-load --list' to see available keys."
+  fi
+
+  load_key "$vault_name" "$item_title"
+}
+
+do_clear_and_reload() {
+  info "Clearing all keys from ssh-agent..."
+  ssh-add -D 2>/dev/null || true
+  info "Reloading from 1Password..."
+  do_load_all
+}
+
+# --- Main ---
+
+case "${1:-}" in
+  --list|-l)
+    preflight
+    do_list
+    ;;
+  --clear|-c)
+    preflight
+    do_clear_and_reload
+    ;;
+  --help|-h)
+    echo "Usage: op-ssh-load [OPTIONS] [key-name]"
+    echo ""
+    echo "Load SSH keys from 1Password into ssh-agent (keys never touch disk)."
+    echo ""
+    echo "Options:"
+    echo "  (no args)       Load all SSH keys from accessible vaults"
+    echo "  --list, -l      List available SSH keys"
+    echo "  --clear, -c     Clear agent and reload all keys"
+    echo "  --help, -h      Show this help"
+    echo "  <key-name>      Load a specific key by name or ID"
+    echo ""
+    echo "Environment:"
+    echo "  OP_SERVICE_ACCOUNT_TOKEN   1Password service account token"
+    echo "  Token file: ${TOKEN_FILE}"
+    ;;
+  "")
+    preflight
+    do_load_all
+    ;;
+  *)
+    preflight
+    do_load_single "$1"
+    ;;
+esac
